@@ -1,6 +1,6 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-class PreprocessData():
+class PreprocessData:
     def __init__(self, dataset):
         self.dataset = dataset
 

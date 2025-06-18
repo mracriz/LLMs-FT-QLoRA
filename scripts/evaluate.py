@@ -1,15 +1,17 @@
-import pytest
+# --- Bibliotecas Padrão do Python ---
+import asyncio  # Para a função assíncrona do DeepEval
+import random   # Para amostragem de dados no MMLU
+from typing import Dict, List, Tuple # Para anotações de tipo (boas práticas)
+
+# --- Bibliotecas de Terceiros (Instaladas com Pip) ---
 import torch
-from deepeval.test_case import LLMTestCase
-from deepeval import evaluate
-from deepeval.metrics import BaseMetric
-from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset
-import os
-import asyncio # Add this import
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from deepeval import evaluate
+from deepeval.test_case import LLMTestCase
 
+# --- Módulos do Seu Próprio Projeto ---
 from custom_metrics.execution_accuracy import ExecutionAccuracy
-
 
 class EvaluateLLM():
 
@@ -70,3 +72,132 @@ class EvaluateLLM():
         )
         print("Avaliação concluída.")
 
+class MMLUEvaluator:
+    """
+    Uma classe para avaliar modelos de linguagem na suíte de benchmarks MMLU.
+
+    Esta classe lida com o carregamento do dataset, a criação de prompts few-shot,
+    a execução da inferência do modelo e o cálculo da acurácia.
+    """
+    
+    def __init__(self, model_path: str, seed: int = 42):
+        """
+        Inicializa o avaliador.
+
+        Args:
+            model_path (str): O caminho para o modelo ou o nome no Hugging Face Hub.
+            seed (int): A semente para garantir a reprodutibilidade na amostragem do dataset.
+        """
+        self.model_path = model_path
+        self.seed = seed
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        print(f"Inicializando avaliador para o modelo: {self.model_path}")
+        
+        self._load_model_and_tokenizer()
+        self._prepare_dataset()
+
+    def _load_model_and_tokenizer(self):
+        """Carrega o modelo e o tokenizador a partir do `model_path`."""
+        print("Carregando modelo e tokenizador...")
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            self.model_path,
+            device_map=self.device,
+            torch_dtype=torch.bfloat16 # Use o dtype apropriado
+        )
+        print("Modelo e tokenizador carregados.")
+
+    def _prepare_dataset(self):
+        """
+        Prepara a suíte de avaliação MMLU conforme os requisitos do trabalho.
+        Cria uma suíte com 150 questões de teste e 4 exemplos de `dev` por categoria.
+        """
+        print("Preparando o dataset MMLU...")
+        self.categories = {
+            "stem": "computer_science",
+            "humanities": "philosophy",
+            "social_sciences": "economics"
+        }
+        
+        self.evaluation_suite: Dict[str, List] = {}
+        self.few_shot_examples: Dict[str, List] = {}
+
+        for suite_name, hf_subset in self.categories.items():
+            dataset = load_dataset("cais/mmlu", hf_subset)
+            
+            # Garante amostragem reprodutível
+            random.seed(self.seed)
+            
+            test_samples = list(dataset['test'])
+            self.evaluation_suite[suite_name] = random.sample(test_samples, 50)
+            
+            dev_samples = list(dataset['dev'])
+            self.few_shot_examples[suite_name] = random.sample(dev_samples, 4)
+        print("Dataset preparado.")
+
+    def _create_prompt(self, question_data: Dict, examples: List[Dict]) -> str:
+        """Cria um prompt 4-shot para uma determinada questão."""
+        choices = ['A', 'B', 'C', 'D']
+        prompt = "The following are multiple choice questions (with answers).\n\n"
+        
+        for ex in examples:
+            prompt += f"Question: {ex['question']}\n"
+            for i, choice in enumerate(ex['choices']):
+                prompt += f"{choices[i]}. {choice}\n"
+            prompt += f"Answer: {choices[ex['answer']]}\n\n"
+            
+        prompt += f"Question: {question_data['question']}\n"
+        for i, choice in enumerate(question_data['choices']):
+            prompt += f"{choices[i]}. {choice}\n"
+        prompt += "Answer:"
+        
+        return prompt
+
+    def run_evaluation(self) -> Tuple[float, Dict[str, float]]:
+        """
+        Executa a avaliação completa na suíte MMLU.
+
+        Returns:
+            Tuple[float, Dict[str, float]]: Uma tupla contendo a acurácia geral
+            e um dicionário com as acurácias por categoria.
+        """
+        print(f"\nIniciando avaliação para o modelo: {self.model_path}")
+        category_results = {s: {"correct": 0, "total": 0} for s in self.categories.keys()}
+
+        for suite_name, questions in self.evaluation_suite.items():
+            for question in questions:
+                prompt = self._create_prompt(question, self.few_shot_examples[suite_name])
+                
+                inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+                outputs = self.model.generate(**inputs, max_new_tokens=5, pad_token_id=self.tokenizer.eos_token_id)
+                
+                generated_text = self.tokenizer.decode(outputs[0, inputs['input_ids'].shape[1]:], skip_special_tokens=True)
+                
+                predicted_answer = generated_text.strip().upper()
+                
+                choices = ['A', 'B', 'C', 'D']
+                correct_answer = choices[question['answer']]
+                
+                if predicted_answer.startswith(correct_answer):
+                    category_results[suite_name]["correct"] += 1
+                
+                category_results[suite_name]["total"] += 1
+
+        # Calcula as acurácias
+        total_correct = sum(d["correct"] for d in category_results.values())
+        total_questions = sum(d["total"] for d in category_results.values())
+        
+        overall_accuracy = (total_correct / total_questions) * 100 if total_questions > 0 else 0
+        category_accuracies = {
+            s: (d["correct"] / d["total"]) * 100 if d["total"] > 0 else 0 
+            for s, d in category_results.items()
+        }
+        
+        return overall_accuracy, category_accuracies
+
+def calculate_regression(base_acc: float, ft_acc: float) -> float:
+    """Calcula a variação percentual entre duas acurácias."""
+    if base_acc == 0:
+        return float('inf') # Evita divisão por zero
+    return ((ft_acc - base_acc) / base_acc) * 100
