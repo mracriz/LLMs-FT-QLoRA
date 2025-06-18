@@ -7,7 +7,7 @@ import torch
 from peft import LoraConfig, get_peft_model, PeftModel
 from trl import SFTTrainer, TrainingArguments # Make sure to import TrainingArguments if it's what you pass as training_arguments
 
-class LLM_LoRA_Model():
+class LLM_LoRA_Model:
     def __init__(self, train_data, eval_data=None):
         self.model_name = None
         self.model = None
