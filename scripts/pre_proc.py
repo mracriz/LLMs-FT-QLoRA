@@ -1,50 +1,4 @@
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer)
-
-class LoadModel():
-    def __init__(self, model_name):
-        self.model_name = model_name
-
-    def get_model(self, quantization=None):
-        print(f"Carregando modelo base: {self.model_name}")
-        model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            quantization_config=quantization,
-            device_map="auto", # Mapeia automaticamente para GPU se disponível
-            trust_remote_code=True, # Necessário para alguns modelos como Phi-3
-            # attn_implementation="flash_attention_2" # Opcional: se suportado e instalado, pode acelerar
-        )
-        print("Modelo carregado.")
-
-        return model
-
-    def get_tokenizer(self):
-        tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
-        # 1. Configurar padding token se não estiver definido
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-            # Alguns modelos (como Llama) não têm pad_token. Usar eos_token é uma prática comum.
-            # Para modelos que não são auto-regressivos ou que têm arquiteturas específicas, isso pode precisar de ajuste.
-
-        # 2. Definir o chat_template explicitamente se não estiver configurado
-        # Isso é essencial para modelos como o Open Llama 3B V2, que pode não ter um template padrão.
-        if tokenizer.chat_template is None:
-            print(f"tokenizer.chat_template não encontrado para {self.get_model}. Definindo manualmente...")
-            # Este é o template padrão para modelos Llama 2 Instruct (e muitos "Llama-like")
-            # Ele inclui <s> e </s> automaticamente quando tokenize=True, mas é bom tê-lo completo aqui.
-            tokenizer.chat_template = (
-                "{% for message in messages %}"
-                "{% if message['role'] == 'user' %}"
-                "<s>[INST] {{ message['content'] }} [/INST]"
-                "{% elif message['role'] == 'assistant' %}"
-                " {{ message['content'] }}</s>" # Note o espaço antes da resposta do assistente
-                "{% endif %}"
-                "{% endfor %}"
-            )
-        print("Tokenizer carregado e chat_template configurado se necessário.")
-
-        return tokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 class PreprocessData():
     def __init__(self, dataset):
@@ -96,9 +50,9 @@ class PreprocessData():
         print("Pré-processando o dataset de treinamento para o formato de chat...")
         # Use .map() para aplicar a função a cada exemplo do dataset
         processed_dataset = self.dataset.map(
-            lambda x: self.preprocess_example(x, tokenizer, MODEL_NAME),
+            lambda x: self.format_example(x, tokenizer, MODEL_NAME),
             num_proc=4, # Opcional: use múltiplos processos para acelerar
-            remove_columns= self.train_dataset.column_names # Remove as colunas originais, mantendo apenas 'text'
+            remove_columns= self.dataset.column_names # Remove as colunas originais, mantendo apenas 'text'
         )
 
         return processed_dataset
