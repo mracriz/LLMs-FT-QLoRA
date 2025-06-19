@@ -24,7 +24,8 @@ from scripts.evaluate import EvaluateLLM, MMLUEvaluator, calculate_regression
 SEED = 42
 
 # Modelo base a ser utilizado. Ex: "meta-llama/Llama-3-8B-Instruct"
-BASE_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct" 
+#BASE_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct" 
+BASE_MODEL_ID = "openlm-research/open_llama_3b_v2"
 
 # Caminho para a pasta 'database' do Spider, necessária para a ExecutionAccuracy
 SPIDER_DB_PATH = "path/to/your/spider/database" 
@@ -78,7 +79,7 @@ async def main():
     
     print("\n[MMLU] Avaliando o modelo base para medir a capacidade de generalização inicial...")
     base_mmlu_evaluator = MMLUEvaluator(model_path=BASE_MODEL_ID, seed=SEED)
-    base_mmlu_accuracy, base_mmlu_by_category = await base_mmlu_evaluator.run_evaluation()
+    base_mmlu_accuracy, base_mmlu_by_category = base_mmlu_evaluator.run_evaluation()
     print(f"\n[RESULTADO] Acurácia MMLU (Base): {base_mmlu_accuracy:.2f}%")
     print(f"  - Por Categoria: {base_mmlu_by_category}")
 
@@ -93,11 +94,13 @@ async def main():
     spider_dataset = load_dataset("spider", split="train")
     spider_eval_dataset = load_dataset("spider", split="validation")
 
-    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID)
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID, use_fast=False)
     
     preprocessor = PreprocessData(dataset=spider_dataset)
     # O método de pré-processamento precisa receber o tokenizer.
-    processed_train_dataset = spider_dataset.map(lambda x: preprocessor.preprocess_example(x, tokenizer))
+    processed_train_dataset = spider_dataset.map(
+    lambda x: preprocessor.preprocess_example(x, tokenizer, BASE_MODEL_ID),
+    num_proc=4)
     print("Dataset de treinamento pré-processado com sucesso.")
 
     # --- Loop de Experimentos de Fine-Tuning e Avaliação ---
@@ -150,7 +153,7 @@ async def main():
         print(f"\n[{run_name}] Avaliando a regressão de capacidade no MMLU...")
 
         ft_mmlu_evaluator = MMLUEvaluator(model_path=BASE_MODEL_ID, adapter_path=adapter_path, seed=SEED)
-        ft_mmlu_accuracy, ft_mmlu_by_category = await ft_mmlu_evaluator.run_evaluation()
+        ft_mmlu_accuracy, ft_mmlu_by_category = ft_mmlu_evaluator.run_evaluation()
 
         print(f"\n[RESULTADO] Acurácia MMLU (Fine-Tuned - {run_name}): {ft_mmlu_accuracy:.2f}%")
         print(f"  - Por Categoria: {ft_mmlu_by_category}")
