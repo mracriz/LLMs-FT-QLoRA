@@ -24,7 +24,7 @@ from scripts.evaluate import EvaluateLLM, MMLUEvaluator, calculate_regression
 SEED = 42
 
 # Modelo base a ser utilizado. Ex: "meta-llama/Llama-3-8B-Instruct"
-BASE_MODEL_ID = "meta-llama/Llama-3-8B-Instruct" 
+BASE_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct" 
 
 # Caminho para a pasta 'database' do Spider, necessária para a ExecutionAccuracy
 SPIDER_DB_PATH = "path/to/your/spider/database" 
