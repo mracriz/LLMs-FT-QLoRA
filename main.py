@@ -123,6 +123,7 @@ async def main():
             save_strategy="epoch",
             seed=SEED,
             max_length=1024,  # <-- ADICIONE O PARÂMETRO CORRETO AQUI
+            report_to="none"
         )
             
         lora_model = LLM_LoRA_Model(train_data=processed_train_dataset)
