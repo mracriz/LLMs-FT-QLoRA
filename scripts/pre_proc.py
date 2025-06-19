@@ -46,14 +46,23 @@ class PreprocessData:
 
         return {"text": formatted_text}
 
-    def preprocess_example(self, tokenizer, MODEL_NAME):
-        print("Pré-processando o dataset de treinamento para o formato de chat...")
-        # Use .map() para aplicar a função a cada exemplo do dataset
-        processed_dataset = self.dataset.map(
-            lambda x: self.format_example(x, tokenizer, MODEL_NAME),
-            num_proc=4, # Opcional: use múltiplos processos para acelerar
-            remove_columns= self.dataset.column_names # Remove as colunas originais, mantendo apenas 'text'
+    def preprocess_example(self, example, tokenizer, model_name):
+        prompt = (
+            f"### INSTRUCTION\n"
+            f"Generate a SQL query that answers the following question: {example['question']}\n"
+            f"### RESPONSE\n"
+            f"{example['query']}"
         )
 
-        return processed_dataset
+        # Lógica de formatação do chat
+        if "llama-3" in model_name.lower():
+            messages = [
+                {"role": "system", "content": "You are a helpful SQL assistant."},
+                {"role": "user", "content": f"Generate a SQL query that answers the question: {example['question']}"},
+                {"role": "assistant", "content": example['query']}
+            ]
+            text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+            return {"text": text}
+        else:
+            return {"text": prompt}
 

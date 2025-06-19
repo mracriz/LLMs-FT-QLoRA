@@ -100,7 +100,7 @@ class MMLUEvaluator:
     def _load_model_and_tokenizer(self):
         """Carrega o modelo e o tokenizador a partir do `model_path`."""
         print("Carregando modelo e tokenizador...")
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, use_fast=False)
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
             device_map=self.device,
@@ -115,9 +115,9 @@ class MMLUEvaluator:
         """
         print("Preparando o dataset MMLU...")
         self.categories = {
-            "stem": "computer_science",
-            "humanities": "philosophy",
-            "social_sciences": "economics"
+            "STEM": "college_computer_science", 
+            "Humanities": "philosophy",          
+            "Social Sciences": "high_school_macroeconomics"        
         }
         
         self.evaluation_suite: Dict[str, List] = {}
