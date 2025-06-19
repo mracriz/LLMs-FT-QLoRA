@@ -11,6 +11,7 @@ from transformers import (
     AutoTokenizer
 )
 from peft import LoraConfig
+from trl import SFTConfig
 
 # Importa as classes dos seus módulos
 from scripts.pre_proc import PreprocessData
@@ -111,7 +112,7 @@ async def main():
         # --- Execução do Fine-Tuning ---
         print(f"\n[{run_name}] Iniciando fine-tuning com QLoRA...")
         
-        training_args = TrainingArguments(
+        training_args = SFTConfig(
             per_device_train_batch_size=4,
             gradient_accumulation_steps=4,
             warmup_steps=2,
@@ -121,8 +122,9 @@ async def main():
             logging_steps=50,
             save_strategy="epoch",
             seed=SEED,
+            max_length=1024,  # <-- ADICIONE O PARÂMETRO CORRETO AQUI
         )
-        
+            
         lora_model = LLM_LoRA_Model(train_data=processed_train_dataset)
         lora_model.set_model(BASE_MODEL_ID, quantization=quantization_config)
         lora_model.tokenizer = tokenizer
