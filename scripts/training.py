@@ -73,13 +73,11 @@ class LLM_LoRA_Model:
 
         print("Iniciando a configuração do SFTTrainer...")
         trainer = SFTTrainer(
-        model=self.model,
-        args=training_arguments,
-        train_dataset=self.train_data,
-        eval_dataset=self.eval_data,
-        peft_config=lora_config,
-        dataset_text_field="text",
-        max_seq_length=1024,  
+            model=self.model,
+            args=training_arguments,
+            train_dataset=self.train_data,
+            eval_dataset=self.eval_data,
+            peft_config=lora_config,
         )
 
         print("Iniciando o treinamento QLoRA...")
