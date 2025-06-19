@@ -73,14 +73,13 @@ class LLM_LoRA_Model:
 
         print("Iniciando a configuração do SFTTrainer...")
         trainer = SFTTrainer(
-            model=self.model,
-            args=training_arguments,
-            train_dataset=self.train_data,
-            eval_dataset=self.eval_data,
-            tokenizer=self.tokenizer, # CORRECTED: Use 'tokenizer' argument
-            peft_config=lora_config,
-            dataset_text_field="text", # Specify the column name containing the formatted text
-                                       # This is crucial if your dataset only has a 'text' column after preprocessing
+        model=self.model,
+        args=training_arguments,
+        train_dataset=self.train_data,
+        eval_dataset=self.eval_data,
+        peft_config=lora_config,
+        dataset_text_field="text",
+        max_seq_length=1024,  
         )
 
         print("Iniciando o treinamento QLoRA...")
