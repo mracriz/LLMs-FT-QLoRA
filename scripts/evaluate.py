@@ -102,6 +102,23 @@ class MMLUEvaluator:
         """Carrega o modelo e o tokenizador a partir do `model_path`."""
         print("Carregando modelo e tokenizador...")
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, use_fast=False)
+        
+        # --- ADICIONE ESTE BLOCO DE CÓDIGO ---
+        # Define o chat_template manualmente se não estiver configurado
+        if self.tokenizer.chat_template is None:
+            print(f"tokenizer.chat_template não encontrado para {self.model_path}. Definindo manualmente...")
+            # Template para modelos baseados em Llama 2
+            self.tokenizer.chat_template = (
+                "{% for message in messages %}"
+                "{% if message['role'] == 'user' %}"
+                "<s>[INST] {{ message['content'] }} [/INST]"
+                "{% elif message['role'] == 'assistant' %}"
+                " {{ message['content'] }}</s>"
+                "{% endif %}"
+                "{% endfor %}"
+            )
+        # --- FIM DO BLOCO ADICIONADO ---
+
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
             device_map=self.device,

@@ -5,7 +5,6 @@ import torch
 import asyncio
 from datasets import load_dataset
 from transformers import (
-    TrainingArguments,
     BitsAndBytesConfig,
     AutoModelForCausalLM,
     AutoTokenizer
@@ -14,23 +13,18 @@ from peft import LoraConfig
 from trl import SFTConfig
 from deepeval import evaluate
 
-# Importa as classes dos módulos do projeto
 from scripts.pre_proc import PreprocessData
 from scripts.training import LLM_LoRA_Model
 from scripts.evaluate import EvaluateLLM, MMLUEvaluator, BaselineEvaluator, calculate_regression
 from custom_metrics.execution_accuracy import ExecutionAccuracy
 
-# --- Configuração do Experimento (Conforme PDF) ---
-
-# Semente para reprodutibilidade, conforme exigido nas especificações
 SEED = 42
 
-# Modelo base a ser utilizado.
-# Mude para "meta-llama/Llama-3.1-8B-Instruct" para o trabalho final, se desejar.
+# Modelo base de 8B de parâmetros, conforme sugerido no trabalho 
+#BASE_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
 BASE_MODEL_ID = "openlm-research/open_llama_3b_v2"
 
-# O caminho agora aponta para o diretório raiz do projeto (".").
-SPIDER_DB_PATH = "."
+SPIDER_DB_PATH = "." # Usando o diretório raiz como exemplo
 
 # Configurações de QLoRA (quantização) para carregar o modelo de forma eficiente
 quantization_config = BitsAndBytesConfig(
@@ -39,16 +33,16 @@ quantization_config = BitsAndBytesConfig(
     bnb_4bit_compute_dtype=torch.bfloat16
 )
 
-# Configuração do LoRA, documentada para o relatório
+# Configuração do LoRA, a ser documentada no relatório 
 lora_config = LoraConfig(
     r=16,
     lora_alpha=32,
     lora_dropout=0.05,
-    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], # Módulos alvo para Llama 3
     task_type="CAUSAL_LM",
 )
 
-# Hiperparâmetros de treinamento para os dois experimentos obrigatórios
+# Hiperparâmetros de treinamento para os dois experimentos obrigatórios 
 TRAINING_CONFIGS = [
     {
         "learning_rate": 2e-4,
@@ -79,15 +73,14 @@ async def main():
     # --- FASE 1: AVALIAÇÃO DE BASELINE DO MODELO BASE ---
     print("--- INICIANDO AVALIAÇÃO DE BASELINE DO MODELO BASE ---")
 
+    # Avaliação de Generalização (MMLU) 
     print("\n[MMLU Baseline] Avaliando o modelo base para medir a capacidade de generalização inicial...")
     base_mmlu_evaluator = MMLUEvaluator(model_path=BASE_MODEL_ID, seed=SEED)
-    
-    # --- CORREÇÃO AQUI: 'await' removido ---
     base_mmlu_accuracy, base_mmlu_by_category = base_mmlu_evaluator.run_evaluation()
-    
     print(f"\n[RESULTADO] Acurácia MMLU (Base): {base_mmlu_accuracy:.2f}%")
     print(f"  - Por Categoria: {base_mmlu_by_category}")
 
+    # Avaliação na Tarefa-Alvo (Text-to-SQL) com Few-Shot 
     print("\n[Spider Baseline] Avaliando o modelo base em Text-to-SQL com prompt few-shot...")
     spider_eval_dataset = load_dataset("spider", split="validation")
     baseline_text2sql_evaluator = BaselineEvaluator(
@@ -99,10 +92,13 @@ async def main():
     print("\n[Spider Baseline] Calculando Acurácia de Execução para o baseline...")
     execution_metric = ExecutionAccuracy(model_db_path=SPIDER_DB_PATH)
     await evaluate(test_cases=baseline_test_cases, metrics=[execution_metric])
+    # A acurácia do baseline será impressa pelo DeepEval. Anote este valor para o relatório.
 
+    # Limpa a memória antes de iniciar o fine-tuning
     del base_mmlu_evaluator, baseline_text2sql_evaluator, baseline_test_cases
     torch.cuda.empty_cache()
 
+    # --- PRÉ-PROCESSAMENTO DOS DADOS PARA FINE-TUNING ---
     print("\n--- CARREGANDO E PRÉ-PROCESSANDO DADOS PARA FINE-TUNING ---")
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID, use_fast=False)
     spider_train_dataset = load_dataset("spider", split="train")
@@ -117,10 +113,13 @@ async def main():
     del tokenizer
     torch.cuda.empty_cache()
 
+
+    # --- FASES 2, 3 e 4: LOOP DE EXPERIMENTOS DE FINE-TUNING E AVALIAÇÃO ---
     for i, config in enumerate(TRAINING_CONFIGS):
         run_name = f"Execução {i+1} (LR={config['learning_rate']}, Epochs={config['num_train_epochs']})"
         print(f"\n--- INICIANDO {run_name.upper()} ---")
 
+        # --- FASE 2: Execução do Fine-Tuning ---
         print(f"\n[{run_name}] Iniciando fine-tuning com QLoRA...")
         
         training_args = SFTConfig(
@@ -154,6 +153,7 @@ async def main():
         del trained_model, lora_model_trainer
         torch.cuda.empty_cache()
 
+        # --- FASE 3: Avaliação na Tarefa-Alvo (Text-to-SQL) ---
         print(f"\n[{run_name}] Avaliando o desempenho em Text-to-SQL...")
         
         ft_model = AutoModelForCausalLM.from_pretrained(
@@ -171,12 +171,12 @@ async def main():
             database_path=SPIDER_DB_PATH
         )
         await evaluator_text2sql.evaluate_accuracy()
+        # A acurácia será impressa pelo DeepEval. Anote para o relatório.
 
+        # --- FASE 4: Análise de Regressão de Capacidade (MMLU) ---
         print(f"\n[{run_name}] Avaliando a regressão de capacidade no MMLU...")
 
         ft_mmlu_evaluator = MMLUEvaluator(model_path=BASE_MODEL_ID, adapter_path=adapter_path, seed=SEED)
-        
-        # --- CORREÇÃO AQUI: 'await' removido ---
         ft_mmlu_accuracy, ft_mmlu_by_category = ft_mmlu_evaluator.run_evaluation()
 
         print(f"\n[RESULTADO] Acurácia MMLU (Fine-Tuned - {run_name}): {ft_mmlu_accuracy:.2f}%")
