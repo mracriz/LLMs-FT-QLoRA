@@ -119,4 +119,4 @@ Parameters/
 
 # Python cache directory (from original request)
 __pycache__/
-out*/
+out*/*.zip
