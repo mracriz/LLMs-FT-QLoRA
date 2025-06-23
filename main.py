@@ -106,7 +106,7 @@ async def main():
     
     print("\n[Spider Baseline] Calculando Acurácia de Execução para o baseline...")
     execution_metric = ExecutionAccuracy(model_db_path=SPIDER_DB_PATH)
-    evaluate(test_cases=baseline_test_cases, metrics=[execution_metric])
+    evaluate(test_cases=baseline_test_cases, metrics=[execution_metric], show_progress=False)
     
     del base_mmlu_evaluator, baseline_text2sql_evaluator, baseline_test_cases
     torch.cuda.empty_cache()
