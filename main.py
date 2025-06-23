@@ -27,8 +27,8 @@ BASE_MODEL_ID = "openlm-research/open_llama_3b_v2"
 SPIDER_DB_PATH = "spider_data/database"
 
 # --- Configuração de Amostragem para Teste Rápido ---
-SAMPLE_SIZE_EVAL = 2
-SAMPLE_SIZE_TRAIN = 5
+SAMPLE_SIZE_EVAL = None
+SAMPLE_SIZE_TRAIN = None
 
 quantization_config = BitsAndBytesConfig(
     load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16
