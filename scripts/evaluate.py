@@ -1,7 +1,8 @@
 # --- Bibliotecas Padrão do Python ---
-import asyncio  # Para a função assíncrona do DeepEval
-import random   # Para amostragem de dados no MMLU
-from typing import Dict, List, Tuple # Para anotações de tipo (boas práticas)
+import asyncio
+import random
+from typing import Dict, List, Tuple
+from tqdm import tqdm
 
 # --- Bibliotecas de Terceiros (Instaladas com Pip) ---
 import torch
@@ -201,3 +202,85 @@ def calculate_regression(base_acc: float, ft_acc: float) -> float:
     if base_acc == 0:
         return float('inf') # Evita divisão por zero
     return ((ft_acc - base_acc) / base_acc) * 100
+
+
+class BaselineEvaluator:
+    """
+    Avalia um modelo base na tarefa Text-to-SQL usando uma abordagem few-shot
+    antes de qualquer fine-tuning, conforme a Fase 1 do projeto.
+    """
+
+    def __init__(self, model, tokenizer, device="cuda"):
+        self.model = model
+        self.tokenizer = tokenizer
+        self.device = device
+        self.spider_train_dataset = load_dataset("spider", split="train")
+
+    def _get_few_shot_examples(self) -> list:
+        indices = [1, 10, 20]
+        examples = []
+        for i in indices:
+            sample = self.spider_train_dataset[i]
+            examples.append({
+                "question": sample["question"],
+                "query": sample["query"]
+            })
+        return examples
+
+    def _create_prompt(self, question: str, examples: list) -> str:
+        prompt = "Gere uma consulta SQL que responda à seguinte pergunta com base no esquema do banco de dados.\n\n"
+        for ex in examples:
+            prompt += f"-- Pergunta: {ex['question']}\n"
+            prompt += f"SQL: {ex['query']}\n\n"
+        prompt += f"-- Pergunta: {question}\n"
+        prompt += "SQL:"
+        return prompt
+
+    def run_evaluation(self, eval_dataset) -> list:
+        print("--- INICIANDO AVALIAÇÃO DE BASELINE EM TEXT-TO-SQL (FEW-SHOT) ---")
+        few_shot_examples = self._get_few_shot_examples()
+        print(f"Usando {len(few_shot_examples)} exemplos few-shot fixos para o prompt.")
+        test_cases = []
+        
+        for item in tqdm(eval_dataset, desc="Avaliando baseline Text-to-SQL"):
+            question = item['question']
+            ground_truth_sql = item['query']
+            db_id = item['db_id']
+
+            prompt_text = self._create_prompt(question, few_shot_examples)
+            messages = [{"role": "user", "content": prompt_text}]
+            input_text = self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            inputs = self.tokenizer(input_text, return_tensors="pt").to(self.device)
+
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=128,
+                    num_return_sequences=1,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    do_sample=False
+                )
+            
+            generated_sql = self.tokenizer.decode(
+                outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True
+            ).strip()
+
+            test_cases.append(
+                LLMTestCase(
+                    input=question,
+                    actual_output=generated_sql,
+                    expected_output=ground_truth_sql,
+                    context={"db_id": str(db_id)}
+                )
+            )
+        
+        print(f"Avaliação de baseline concluída. {len(test_cases)} consultas SQL geradas.")
+        if test_cases:
+            print("\nExemplo de Geração (Baseline):")
+            print(f"  Pergunta: {test_cases[0].input}")
+            print(f"  SQL Gerado: {test_cases[0].actual_output}")
+            print(f"  SQL Correto: {test_cases[0].expected_output}")
+
+        return test_cases
