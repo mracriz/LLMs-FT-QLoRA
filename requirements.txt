@@ -1,3 +1,13 @@
+# Adiciona o índice extra do PyTorch para garantir a compatibilidade com CUDA 12.1 (usado no Colab)
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+# Dependências principais (versões de trl e bitsandbytes removidas para permitir upgrade)
+trl
+bitsandbytes
+torch
+torchvision
+
+# Outras dependências do projeto original
 accelerate==1.7.0
 aiohappyeyeballs==2.6.1
 aiohttp==3.12.13
@@ -7,7 +17,6 @@ anthropic==0.54.0
 anyio==4.9.0
 attrs==25.3.0
 backoff==2.2.1
-bitsandbytes==0.42.0
 cachetools==5.5.2
 certifi==2025.6.15
 charset-normalizer==3.4.2
@@ -109,11 +118,7 @@ sympy==1.14.0
 tabulate==0.9.0
 tenacity==9.0.0
 tokenizers==0.21.1
-torch==2.7.1
-tqdm==4.67.1
 transformers==4.52.4
-triton==3.3.1
-trl==0.18.2
 typer==0.16.0
 typing-inspection==0.4.1
 typing_extensions==4.14.0
