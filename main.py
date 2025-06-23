@@ -39,7 +39,7 @@ lora_config = LoraConfig(
 )
 TRAINING_CONFIGS = [
     {"learning_rate": 2e-4, "num_train_epochs": 1, "output_dir": "./results/run_1_lr_2e-4_epochs_1"},
-    {"learning_rate": 1e-4, "num_train_epochs": 2, "output_dir": "./results/run_2_lr_1e-4_epochs_2"}
+    {"learning_rate": 1e-4, "num_train_epochs": 1, "output_dir": "./results/run_2_lr_1e-4_epochs_2"}
 ]
 
 def setup_spider_database():
