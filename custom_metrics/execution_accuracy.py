@@ -12,13 +12,10 @@ class ExecutionAccuracy(BaseMetric):
     def __init__(self, name: str = "Execution Accuracy", threshold: float = 0.5,
                  model_db_path: str = "database"):
         
-        # --- CORREÇÃO AQUI ---
-        # Inicializa a classe pai sem argumentos e define as propriedades manualmente
-        # para compatibilidade com versões mais recentes do DeepEval.
+        # Inicializa a classe pai sem argumentos e define as propriedades manualmente.
         super().__init__()
         self.threshold = threshold
         self.name = name
-        # --- FIM DA CORREÇÃO ---
         
         self.model_db_path = model_db_path
 
@@ -81,3 +78,11 @@ class ExecutionAccuracy(BaseMetric):
         Wrapper assíncrono para o método síncrono `measure`.
         """
         return self.measure(test_case)
+
+    def is_successful(self) -> bool:
+        """
+        Retorna se a medição da métrica foi considerada um sucesso.
+        """
+        # A biblioteca DeepEval chama este método DEPOIS de executar o 'measure'.
+        # O valor de self.success é definido dentro do 'measure'.
+        return self.success

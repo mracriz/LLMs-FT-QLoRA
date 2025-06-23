@@ -40,24 +40,22 @@ class EvaluateLLM():
             generated_sql = self.tokenizer.decode(
                 outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True
             ).strip()
-
-            # --- MUDANÇA AQUI ---
+            
             test_cases.append(
                 LLMTestCase(
                     input=question,
                     actual_output=generated_sql,
                     expected_output=ground_truth_sql,
-                    context=[str(db_id)] # Passando como lista de strings
+                    context=[str(db_id)]
                 )
             )
-            # --- FIM DA MUDANÇA ---
         print(f"Preparados {len(test_cases)} casos de teste.")
         return test_cases
 
     async def evaluate_accuracy(self):
         print("Iniciando avaliação com DeepEval e métrica customizada...")
         prepared_test_cases = self.prepare_spider_test_cases()
-        await evaluate(
+        evaluate(
             test_cases=prepared_test_cases,
             metrics=[self.custom_metric]
         )
@@ -66,38 +64,34 @@ class EvaluateLLM():
 class MMLUEvaluator:
     """
     Uma classe para avaliar modelos de linguagem na suíte de benchmarks MMLU.
-
-    Esta classe lida com o carregamento do dataset, a criação de prompts few-shot,
-    a execução da inferência do modelo e o cálculo da acurácia.
     """
-    
-    def __init__(self, model_path: str, seed: int = 42):
+    def __init__(self, model_path: str, seed: int = 42, adapter_path: str | None = None):
         """
         Inicializa o avaliador.
-
         Args:
             model_path (str): O caminho para o modelo ou o nome no Hugging Face Hub.
-            seed (int): A semente para garantir a reprodutibilidade na amostragem do dataset.
+            seed (int): A semente para garantir a reprodutibilidade.
+            adapter_path (str | None): O caminho para o adaptador LoRA treinado (opcional).
         """
         self.model_path = model_path
         self.seed = seed
+        self.adapter_path = adapter_path
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
         print(f"Inicializando avaliador para o modelo: {self.model_path}")
+        if self.adapter_path:
+            print(f"  - Com adaptador: {self.adapter_path}")
         
         self._load_model_and_tokenizer()
         self._prepare_dataset()
 
     def _load_model_and_tokenizer(self):
-        """Carrega o modelo e o tokenizador a partir do `model_path`."""
+        """Carrega o modelo, o adaptador (se fornecido) e o tokenizador."""
         print("Carregando modelo e tokenizador...")
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, use_fast=False)
         
-        # --- ADICIONE ESTE BLOCO DE CÓDIGO ---
-        # Define o chat_template manualmente se não estiver configurado
         if self.tokenizer.chat_template is None:
             print(f"tokenizer.chat_template não encontrado para {self.model_path}. Definindo manualmente...")
-            # Template para modelos baseados em Llama 2
             self.tokenizer.chat_template = (
                 "{% for message in messages %}"
                 "{% if message['role'] == 'user' %}"
@@ -107,20 +101,22 @@ class MMLUEvaluator:
                 "{% endif %}"
                 "{% endfor %}"
             )
-        # --- FIM DO BLOCO ADICIONADO ---
 
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
             device_map=self.device,
-            torch_dtype=torch.bfloat16 # Use o dtype apropriado
+            torch_dtype=torch.bfloat16
         )
+
+        if self.adapter_path:
+            print(f"Carregando adaptador LoRA de: {self.adapter_path}")
+            self.model.load_adapter(self.adapter_path)
+            print("Adaptador carregado com sucesso.")
+
         print("Modelo e tokenizador carregados.")
 
     def _prepare_dataset(self):
-        """
-        Prepara a suíte de avaliação MMLU conforme os requisitos do trabalho.
-        Cria uma suíte com 150 questões de teste e 4 exemplos de `dev` por categoria.
-        """
+        """Prepara a suíte de avaliação MMLU."""
         print("Preparando o dataset MMLU...")
         self.categories = {
             "STEM": "college_computer_science", 
@@ -133,13 +129,9 @@ class MMLUEvaluator:
 
         for suite_name, hf_subset in self.categories.items():
             dataset = load_dataset("cais/mmlu", hf_subset)
-            
-            # Garante amostragem reprodutível
             random.seed(self.seed)
-            
             test_samples = list(dataset['test'])
             self.evaluation_suite[suite_name] = random.sample(test_samples, 50)
-            
             dev_samples = list(dataset['dev'])
             self.few_shot_examples[suite_name] = random.sample(dev_samples, 4)
         print("Dataset preparado.")
@@ -163,25 +155,18 @@ class MMLUEvaluator:
         return prompt
 
     def run_evaluation(self) -> Tuple[float, Dict[str, float]]:
-        """
-        Executa a avaliação completa na suíte MMLU.
-
-        Returns:
-            Tuple[float, Dict[str, float]]: Uma tupla contendo a acurácia geral
-            e um dicionário com as acurácias por categoria.
-        """
+        """Executa a avaliação completa na suíte MMLU."""
         print(f"\nIniciando avaliação para o modelo: {self.model_path}")
         category_results = {s: {"correct": 0, "total": 0} for s in self.categories.keys()}
 
         for suite_name, questions in self.evaluation_suite.items():
-            for question in questions:
+            for question in tqdm(questions, desc=f"Avaliando {suite_name}"):
                 prompt = self._create_prompt(question, self.few_shot_examples[suite_name])
                 
                 inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
                 outputs = self.model.generate(**inputs, max_new_tokens=5, pad_token_id=self.tokenizer.eos_token_id)
                 
                 generated_text = self.tokenizer.decode(outputs[0, inputs['input_ids'].shape[1]:], skip_special_tokens=True)
-                
                 predicted_answer = generated_text.strip().upper()
                 
                 choices = ['A', 'B', 'C', 'D']
@@ -192,7 +177,6 @@ class MMLUEvaluator:
                 
                 category_results[suite_name]["total"] += 1
 
-        # Calcula as acurácias
         total_correct = sum(d["correct"] for d in category_results.values())
         total_questions = sum(d["total"] for d in category_results.values())
         
@@ -239,13 +223,11 @@ class BaselineEvaluator:
         return prompt
         
     def run_evaluation(self, eval_dataset) -> list:
-        # ... (código do início de run_evaluation permanece o mesmo) ...
         print("--- INICIANDO AVALIAÇÃO DE BASELINE EM TEXT-TO-SQL (FEW-SHOT) ---")
         few_shot_examples = self._get_few_shot_examples()
         print(f"Usando {len(few_shot_examples)} exemplos few-shot fixos para o prompt.")
         test_cases = []
         
-        from tqdm import tqdm
         for item in tqdm(eval_dataset, desc="Avaliando baseline Text-to-SQL"):
             question = item['question']
             ground_truth_sql = item['query']
@@ -268,16 +250,14 @@ class BaselineEvaluator:
                 outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True
             ).strip()
 
-            # --- MUDANÇA AQUI ---
             test_cases.append(
                 LLMTestCase(
                     input=question,
                     actual_output=generated_sql,
                     expected_output=ground_truth_sql,
-                    context=[str(db_id)] # Passando como lista de strings
+                    context=[str(db_id)]
                 )
             )
-            # --- FIM DA MUDANÇA ---
         
         print(f"Avaliação de baseline concluída. {len(test_cases)} consultas SQL geradas.")
         if test_cases:
