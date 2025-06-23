@@ -22,7 +22,8 @@ from custom_metrics.execution_accuracy import ExecutionAccuracy
 SEED = 42
 
 # Modelo base de 8B de parâmetros, conforme sugerido no trabalho
-BASE_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
+#BASE_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
+BASE_MODEL_ID = "openlm-research/open_llama_3b_v2"
 
 SPIDER_DB_PATH = "."
 
