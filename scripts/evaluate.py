@@ -59,8 +59,7 @@ class EvaluateLLM():
         prepared_test_cases = self.prepare_spider_test_cases()
         await evaluate(
             test_cases=prepared_test_cases,
-            metrics=[self.custom_metric],
-            async_mode=False
+            metrics=[self.custom_metric]
         )
         print("Avaliação concluída.")
 

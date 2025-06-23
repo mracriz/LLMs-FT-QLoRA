@@ -93,8 +93,7 @@ async def main():
     execution_metric = ExecutionAccuracy(model_db_path=SPIDER_DB_PATH)
     await evaluate(
         test_cases=baseline_test_cases, 
-        metrics=[execution_metric], 
-        async_mode=False # Desativa o modo assíncrono
+        metrics=[execution_metric]# Desativa o modo assíncrono
     )
     
     del base_mmlu_evaluator, baseline_text2sql_evaluator, baseline_test_cases
