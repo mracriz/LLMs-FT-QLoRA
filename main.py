@@ -159,6 +159,18 @@ async def main():
         )
         ft_model.load_adapter(adapter_path)
         ft_tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID)
+
+        if ft_tokenizer.chat_template is None:
+            print(f"Definindo chat_template manualmente para o tokenizador de avaliação...")
+            ft_tokenizer.chat_template = (
+                "{% for message in messages %}"
+                "{% if message['role'] == 'user' %}"
+                "<s>[INST] {{ message['content'] }} [/INST]"
+                "{% elif message['role'] == 'assistant' %}"
+                " {{ message['content'] }}</s>"
+                "{% endif %}"
+                "{% endfor %}"
+            )
         
         evaluator_text2sql = EvaluateLLM(
             eval_dataset=spider_eval_dataset, model=ft_model,
