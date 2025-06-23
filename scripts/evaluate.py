@@ -15,7 +15,6 @@ from deepeval.test_case import LLMTestCase
 from custom_metrics.execution_accuracy import ExecutionAccuracy
 
 class EvaluateLLM():
-
     def __init__(self, eval_dataset, model, tokenizer, database_path):
         self.eval_dataset = eval_dataset
         self.model = model
@@ -28,47 +27,38 @@ class EvaluateLLM():
         for example in self.eval_dataset:
             question = example['question']
             ground_truth_sql = example['query']
-            db_id = example['db_id'] # O db_id é crucial para conectar ao banco correto
+            db_id = example['db_id']
 
-            # Formatar o prompt para o modelo (o mesmo formato usado no fine-tuning)
             messages = [{"role": "user", "content": question}]
-            # Adicionando add_generation_prompt=True para que o modelo comece a gerar a resposta
             input_text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
             inputs = self.tokenizer(input_text, return_tensors="pt").to(self.model.device)
 
-            with torch.no_grad(): # Use torch.no_grad() para inferência
+            with torch.no_grad():
                 outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=100, # Adjust as needed for SQL length
-                    num_return_sequences=1,
-                    pad_token_id=self.tokenizer.eos_token_id
+                    **inputs, max_new_tokens=100, num_return_sequences=1, pad_token_id=self.tokenizer.eos_token_id
                 )
             generated_sql = self.tokenizer.decode(
-                outputs[0][inputs.input_ids.shape[1]:], # Slice to get only the generated part
-                skip_special_tokens=True
+                outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True
             ).strip()
 
+            # --- MUDANÇA AQUI ---
             test_cases.append(
                 LLMTestCase(
                     input=question,
                     actual_output=generated_sql,
                     expected_output=ground_truth_sql,
-                    # Ensure db_id is a string, as DeepEval context typically expects string values
-                    context={"db_id": str(db_id)}
+                    context=[str(db_id)] # Passando como lista de strings
                 )
             )
+            # --- FIM DA MUDANÇA ---
         print(f"Preparados {len(test_cases)} casos de teste.")
-        return test_cases # Crucial: return the list of test cases
+        return test_cases
 
-    async def evaluate_accuracy(self): # Make this method async
+    async def evaluate_accuracy(self):
         print("Iniciando avaliação com DeepEval e métrica customizada...")
-        
-        # 1. Prepare the LLMTestCases by generating predictions
         prepared_test_cases = self.prepare_spider_test_cases()
-
-        # 2. Run the evaluation with DeepEval
         await evaluate(
-            test_cases=prepared_test_cases, # Pass the generated test cases
+            test_cases=prepared_test_cases,
             metrics=[self.custom_metric]
         )
         print("Avaliação concluída.")
@@ -222,11 +212,6 @@ def calculate_regression(base_acc: float, ft_acc: float) -> float:
 
 
 class BaselineEvaluator:
-    """
-    Avalia um modelo base na tarefa Text-to-SQL usando uma abordagem few-shot
-    antes de qualquer fine-tuning, conforme a Fase 1 do projeto.
-    """
-
     def __init__(self, model, tokenizer, device="cuda"):
         self.model = model
         self.tokenizer = tokenizer
@@ -252,13 +237,15 @@ class BaselineEvaluator:
         prompt += f"-- Pergunta: {question}\n"
         prompt += "SQL:"
         return prompt
-
+        
     def run_evaluation(self, eval_dataset) -> list:
+        # ... (código do início de run_evaluation permanece o mesmo) ...
         print("--- INICIANDO AVALIAÇÃO DE BASELINE EM TEXT-TO-SQL (FEW-SHOT) ---")
         few_shot_examples = self._get_few_shot_examples()
         print(f"Usando {len(few_shot_examples)} exemplos few-shot fixos para o prompt.")
         test_cases = []
         
+        from tqdm import tqdm
         for item in tqdm(eval_dataset, desc="Avaliando baseline Text-to-SQL"):
             question = item['question']
             ground_truth_sql = item['query']
@@ -273,25 +260,24 @@ class BaselineEvaluator:
 
             with torch.no_grad():
                 outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=128,
-                    num_return_sequences=1,
-                    pad_token_id=self.tokenizer.eos_token_id,
-                    do_sample=False
+                    **inputs, max_new_tokens=128, num_return_sequences=1,
+                    pad_token_id=self.tokenizer.eos_token_id, do_sample=False
                 )
             
             generated_sql = self.tokenizer.decode(
                 outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True
             ).strip()
 
+            # --- MUDANÇA AQUI ---
             test_cases.append(
                 LLMTestCase(
                     input=question,
                     actual_output=generated_sql,
                     expected_output=ground_truth_sql,
-                    context={"db_id": str(db_id)}
+                    context=[str(db_id)] # Passando como lista de strings
                 )
             )
+            # --- FIM DA MUDANÇA ---
         
         print(f"Avaliação de baseline concluída. {len(test_cases)} consultas SQL geradas.")
         if test_cases:
