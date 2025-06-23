@@ -2,7 +2,6 @@
 import asyncio
 import random
 from typing import Dict, List, Tuple
-from tqdm import tqdm
 
 # --- Bibliotecas de Terceiros (Instaladas com Pip) ---
 import torch
@@ -10,6 +9,7 @@ from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from deepeval import evaluate
 from deepeval.test_case import LLMTestCase
+from tqdm import tqdm # Importa a biblioteca tqdm
 
 # --- Módulos do Seu Próprio Projeto ---
 from custom_metrics.execution_accuracy import ExecutionAccuracy
@@ -24,7 +24,7 @@ class EvaluateLLM():
     def prepare_spider_test_cases(self):
         test_cases = []
         print("Gerando previsões do modelo para o Spider dev split...")
-        for example in self.eval_dataset:
+        for example in tqdm(self.eval_dataset, desc="Avaliando Text-to-SQL (Fine-Tuned)"):
             question = example['question']
             ground_truth_sql = example['query']
             db_id = example['db_id']
@@ -62,17 +62,7 @@ class EvaluateLLM():
         print("Avaliação concluída.")
 
 class MMLUEvaluator:
-    """
-    Uma classe para avaliar modelos de linguagem na suíte de benchmarks MMLU.
-    """
     def __init__(self, model_path: str, seed: int = 42, adapter_path: str | None = None):
-        """
-        Inicializa o avaliador.
-        Args:
-            model_path (str): O caminho para o modelo ou o nome no Hugging Face Hub.
-            seed (int): A semente para garantir a reprodutibilidade.
-            adapter_path (str | None): O caminho para o adaptador LoRA treinado (opcional).
-        """
         self.model_path = model_path
         self.seed = seed
         self.adapter_path = adapter_path
@@ -86,7 +76,6 @@ class MMLUEvaluator:
         self._prepare_dataset()
 
     def _load_model_and_tokenizer(self):
-        """Carrega o modelo, o adaptador (se fornecido) e o tokenizador."""
         print("Carregando modelo e tokenizador...")
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, use_fast=False)
         
@@ -116,7 +105,6 @@ class MMLUEvaluator:
         print("Modelo e tokenizador carregados.")
 
     def _prepare_dataset(self):
-        """Prepara a suíte de avaliação MMLU."""
         print("Preparando o dataset MMLU...")
         self.categories = {
             "STEM": "college_computer_science", 
@@ -128,7 +116,7 @@ class MMLUEvaluator:
         self.few_shot_examples: Dict[str, List] = {}
 
         for suite_name, hf_subset in self.categories.items():
-            dataset = load_dataset("cais/mmlu", hf_subset)
+            dataset = load_dataset("cais/mmlu", hf_subset, trust_remote_code=True)
             random.seed(self.seed)
             test_samples = list(dataset['test'])
             self.evaluation_suite[suite_name] = random.sample(test_samples, 50)
@@ -137,7 +125,6 @@ class MMLUEvaluator:
         print("Dataset preparado.")
 
     def _create_prompt(self, question_data: Dict, examples: List[Dict]) -> str:
-        """Cria um prompt 4-shot para uma determinada questão."""
         choices = ['A', 'B', 'C', 'D']
         prompt = "The following are multiple choice questions (with answers).\n\n"
         
@@ -155,12 +142,11 @@ class MMLUEvaluator:
         return prompt
 
     def run_evaluation(self) -> Tuple[float, Dict[str, float]]:
-        """Executa a avaliação completa na suíte MMLU."""
         print(f"\nIniciando avaliação para o modelo: {self.model_path}")
         category_results = {s: {"correct": 0, "total": 0} for s in self.categories.keys()}
 
         for suite_name, questions in self.evaluation_suite.items():
-            for question in tqdm(questions, desc=f"Avaliando {suite_name}"):
+            for question in tqdm(questions, desc=f"Avaliando MMLU - {suite_name}"):
                 prompt = self._create_prompt(question, self.few_shot_examples[suite_name])
                 
                 inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
@@ -189,9 +175,8 @@ class MMLUEvaluator:
         return overall_accuracy, category_accuracies
 
 def calculate_regression(base_acc: float, ft_acc: float) -> float:
-    """Calcula a variação percentual entre duas acurácias."""
     if base_acc == 0:
-        return float('inf') # Evita divisão por zero
+        return float('inf')
     return ((ft_acc - base_acc) / base_acc) * 100
 
 

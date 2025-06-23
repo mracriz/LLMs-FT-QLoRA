@@ -113,6 +113,19 @@ async def main():
 
     print("\n--- CARREGANDO E PRÉ-PROCESSANDO DADOS PARA FINE-TUNING ---")
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID, use_fast=False)
+
+    if tokenizer.chat_template is None:
+        print(f"Definindo chat_template manualmente para o tokenizador de pré-processamento...")
+        tokenizer.chat_template = (
+            "{% for message in messages %}"
+            "{% if message['role'] == 'user' %}"
+            "<s>[INST] {{ message['content'] }} [/INST]"
+            "{% elif message['role'] == 'assistant' %}"
+            " {{ message['content'] }}</s>"
+            "{% endif %}"
+            "{% endfor %}"
+        )
+
     spider_train_dataset = load_dataset("spider", split="train")
     
     if SAMPLE_SIZE_TRAIN is not None:
