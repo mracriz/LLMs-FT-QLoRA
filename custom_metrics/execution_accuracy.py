@@ -75,3 +75,9 @@ class ExecutionAccuracy(BaseMetric):
         self.reason = "Execution results match." if is_match else "Execution results do not match."
 
         return self.score
+    
+    async def a_measure(self, test_case: LLMTestCase) -> float:
+        """
+        Wrapper assíncrono para o método síncrono `measure`.
+        """
+        return self.measure(test_case)
