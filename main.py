@@ -88,7 +88,7 @@ async def main():
     # Avaliação de Generalização (MMLU)
     print("\n[MMLU Baseline] Avaliando o modelo base...")
     base_mmlu_evaluator = MMLUEvaluator(model_path=BASE_MODEL_ID, seed=SEED)
-    base_mmlu_accuracy, base_mmlu_by_category = await base_mmlu_evaluator.run_evaluation()
+    base_mmlu_accuracy, base_mmlu_by_category = base_mmlu_evaluator.run_evaluation()
     print(f"\n[RESULTADO] Acurácia MMLU (Base): {base_mmlu_accuracy:.2f}%")
     print(f"  - Por Categoria: {base_mmlu_by_category}")
 
@@ -168,7 +168,7 @@ async def main():
 
         print(f"\n[{run_name}] Avaliando a regressão de capacidade no MMLU...")
         ft_mmlu_evaluator = MMLUEvaluator(model_path=BASE_MODEL_ID, adapter_path=adapter_path, seed=SEED)
-        ft_mmlu_accuracy, ft_mmlu_by_category = await ft_mmlu_evaluator.run_evaluation()
+        ft_mmlu_accuracy, ft_mmlu_by_category = ft_mmlu_evaluator.run_evaluation()
 
         print(f"\n[RESULTADO] Acurácia MMLU (Fine-Tuned - {run_name}): {ft_mmlu_accuracy:.2f}%")
         print(f"  - Por Categoria: {ft_mmlu_by_category}")
