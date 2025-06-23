@@ -35,7 +35,8 @@ SPIDER_DB_PATH = "path/to/your/spider/database"
 quantization_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_use_double_quant=True
 )
 
 # Configuração base do LoRA
@@ -113,8 +114,8 @@ async def main():
         print(f"\n[{run_name}] Iniciando fine-tuning com QLoRA...")
         
         training_args = SFTConfig(
-            per_device_train_batch_size=4,
-            gradient_accumulation_steps=4,
+            per_device_train_batch_size=1,  # Reduzido de 4 para 1
+            gradient_accumulation_steps=8,  # Aumentado para compensar o batch size
             warmup_steps=2,
             learning_rate=config['learning_rate'],
             num_train_epochs=config['num_train_epochs'],
@@ -122,7 +123,9 @@ async def main():
             logging_steps=50,
             save_strategy="epoch",
             seed=SEED,
-            max_length=1024,  # <-- ADICIONE O PARÂMETRO CORRETO AQUI
+            max_seq_length=512,  # Nome correto do parâmetro é max_seq_length no SFTConfig, reduzido de 1024
+            gradient_checkpointing=True, # Habilitado para economizar memória
+            optim="paged_adamw_8bit",    # Usando otimizador com eficiência de memória
             report_to="none"
         )
             
