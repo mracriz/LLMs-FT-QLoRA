@@ -19,7 +19,7 @@ Siga os passos abaixo para configurar o ambiente de execução.
 
 ### 1. Clone o Repositório
 ```bash
-git clone [https://github.com/mracriz/LLMs-FT-QLoRA.git](https://github.com/seu-usuario/LLMs-FT-QLoRA.git)
+git clone [https://github.com/mracriz/LLMs-FT-QLoRA.git](https://github.com/mracriz/LLMs-FT-QLoRA.git)
 cd LLMs-FT-QLoRA
 ````
 
